@@ -61,6 +61,7 @@ fn startup(mut commands: Commands,
         })
         .insert(Paddle { speed: 500.0, paddle_number:1 })
         .insert(Collider::Paddle);
+    use rand::seq::SliceRandom;
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(Color::rgb(1.0, 0.5, 0.5).into()),
@@ -69,7 +70,7 @@ fn startup(mut commands: Commands,
             ..Default::default()
         })
         .insert(Ball {
-            velocity: 400.0 * Vec3::new(0.5, -0.5, 0.0).normalize(),
+            velocity: 400.0 * Vec3::new(*vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), *vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), 0.0).normalize(),
         });
     // left
     commands
