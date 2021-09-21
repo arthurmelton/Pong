@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::ui::Val::Px;
+use bevy::sprite::collide_aabb::{Collision, collide};
 
 fn main() {
     App::build()
@@ -7,6 +8,9 @@ fn main() {
         .insert_resource(Scoreboard { score_one: 0, score_two: 0 })
         .add_startup_system(startup.system())
         .add_system(paddle_movement_system.system())
+        .add_system(ball_collision_system.system())
+        .add_system(ball_movement_system.system())
+        .add_system(scoreboard_system.system())
         .run();
 }
 
@@ -27,6 +31,8 @@ struct Scoreboard {
 enum Collider {
     Solid,
     Paddle,
+    Right,
+    Left,
 }
 
 fn startup(mut commands: Commands,
@@ -73,7 +79,7 @@ fn startup(mut commands: Commands,
             sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y + wall_thickness)),
             ..Default::default()
         })
-        .insert(Collider::Solid);
+        .insert(Collider::Left);
     // right
     commands
         .spawn_bundle(SpriteBundle {
@@ -82,7 +88,7 @@ fn startup(mut commands: Commands,
             sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y + wall_thickness)),
             ..Default::default()
         })
-        .insert(Collider::Solid);
+        .insert(Collider::Right);
     // bottom
     commands
         .spawn_bundle(SpriteBundle {
@@ -115,15 +121,6 @@ fn startup(mut commands: Commands,
             ],
             ..Default::default()
         },
-        style: Style {
-            position_type: PositionType::Relative,
-            position: Rect {
-                top: 1,
-                left: 1,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
         ..Default::default()
     });
 }
@@ -134,28 +131,144 @@ fn paddle_movement_system(
     mut query: Query<(&Paddle, &mut Transform)>,
 ) {
     for mut x in query.iter_mut() {
-        let mut direction = 0.0;
+        let mut Direction = 0.0;
         if x.0.paddle_number == 1 {
             if keyboard_input.pressed(KeyCode::Down) {
-                direction -= 1.0;
+                Direction -= 1.0;
             }
 
             if keyboard_input.pressed(KeyCode::Up) {
-                direction += 1.0;
+                Direction += 1.0;
             }
         }
         else {
             if keyboard_input.pressed(KeyCode::LControl) {
-                direction -= 1.0;
+                Direction -= 1.0;
             }
 
             if keyboard_input.pressed(KeyCode::LShift) {
-                direction += 1.0;
+                Direction += 1.0;
             }
         }
-
         let translation = &mut x.1.translation;
-        translation.y += time.delta_seconds() * direction * x.0.speed;
+        translation.y += time.delta_seconds() * Direction * x.0.speed;
         translation.y = translation.y.min(240.0).max(-240.0);
+    }
+}
+
+fn scoreboard_system(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
+    let mut text = query.single_mut().unwrap();
+    text.sections[0].value = format!("{} - {}", scoreboard.score_one, scoreboard.score_two);
+}
+
+fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Transform)>) {
+    // clamp the timestep to stop the ball from escaping when the game starts
+    let delta_seconds = f32::min(0.2, time.delta_seconds());
+
+    if let Ok((ball, mut transform)) = ball_query.single_mut() {
+        if ball.velocity.y != 0.0 {
+            transform.translation += ball.velocity * delta_seconds;
+        }
+        else {
+            transform.translation.y = 0.0;
+            transform.translation.x = 0.0;
+        }
+    }
+}
+
+fn ball_collision_system(
+    mut commands: Commands,
+    mut scoreboard: ResMut<Scoreboard>,
+    mut ball_query: Query<(&mut Ball, &Transform, &Sprite)>,
+    collider_query: Query<(Entity, &Collider, &Transform, &Sprite)>,
+) {
+    if let Ok((mut ball, ball_transform, sprite)) = ball_query.single_mut() {
+        let ball_size = sprite.size;
+        let velocity = &mut ball.velocity;
+
+        if velocity.x == 1.0 {
+            velocity.x = 200.0;
+            velocity.y = 200.0;
+        }
+        if velocity.x == 2.0 {
+            velocity.x = 200.0;
+            velocity.y = -200.0;
+        }
+        if velocity.x == 3.0 {
+            velocity.x = -200.0;
+            velocity.y = 200.0;
+        }
+        if velocity.x == 4.0 {
+            velocity.x = -200.0;
+            velocity.y = -200.0;
+        }
+        
+        // check collision with walls
+        for (collider_entity, collider, transform, sprite) in collider_query.iter() {
+            let collision = collide(
+                ball_transform.translation,
+                ball_size,
+                transform.translation,
+                sprite.size,
+            );
+            if let Some(collision) = collision {
+
+                // reflect the ball when it collides
+                let mut reflect_x = false;
+                let mut reflect_y = false;
+
+                // only reflect if the ball's velocity is going in the opposite direction of the
+                // collision
+                match collision {
+                    Collision::Left => reflect_x = velocity.x > 0.0,
+                    Collision::Right => reflect_x = velocity.x < 0.0,
+                    Collision::Top => reflect_y = velocity.y < 0.0,
+                    Collision::Bottom => reflect_y = velocity.y > 0.0,
+                }
+
+                // reflect velocity on the x-axis if we hit something on the x-axis
+                if reflect_x {
+                    velocity.x = -velocity.x;
+                }
+
+                // reflect velocity on the y-axis if we hit something on the y-axis
+                if reflect_y {
+                    velocity.y = -velocity.y;
+                }
+
+                if let Collider::Left = *collider {
+                    scoreboard.score_one += 1;
+                    if velocity.x > 0.0 && velocity.y > 0.0 {
+                        velocity.x = 1.0;
+                    }
+                    if velocity.x > 0.0 && velocity.y < 0.0 {
+                        velocity.x = 2.0;
+                    }
+                    if velocity.x < 0.0 && velocity.y > 0.0 {
+                        velocity.x = 3.0;
+                    }
+                    if velocity.x < 0.0 && velocity.y < 0.0 {
+                        velocity.x = 4.0;
+                    }
+                    velocity.y = 0.0;
+                }
+                if let Collider::Right = *collider {
+                    scoreboard.score_two += 1;
+                    if velocity.x > 0.0 && velocity.y > 0.0 {
+                        velocity.x = 1.0;
+                    }
+                    if velocity.x > 0.0 && velocity.y < 0.0 {
+                        velocity.x = 2.0;
+                    }
+                    if velocity.x < 0.0 && velocity.y > 0.0 {
+                        velocity.x = 3.0;
+                    }
+                    if velocity.x < 0.0 && velocity.y < 0.0 {
+                        velocity.x = 4.0;
+                    }
+                    velocity.y = 0.0;
+                }
+            }
+        }
     }
 }
