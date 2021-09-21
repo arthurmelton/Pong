@@ -18,7 +18,7 @@ jobs:
           override: true
 
       - name: Build
-        run: cargo build --all --release && strip target/release/nyson && mv target/release/nyson target/release/nyson_amd64
+        run: cargo build --all --release && strip target/release/Pong && mv target/release/nyson target/release/Pong_amd64
 
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -70,7 +70,7 @@ jobs:
           override: true
 
       - name: Build for mac
-        run: cargo build --all --release && strip target/release/nyson && mv target/release/nyson target/release/nyson_darwin
+        run: cargo build --all --release && strip target/release/Pong && mv target/release/nyson target/release/Pong_darwin
 
       - name: Release
         uses: softprops/action-gh-release@v1
