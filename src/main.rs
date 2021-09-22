@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy::ui::Val::Px;
 use bevy::sprite::collide_aabb::{Collision, collide};
 use rand::seq::SliceRandom;
+use std::time::Duration;
 
 fn main() {
     App::build()
@@ -16,6 +17,7 @@ fn main() {
         .add_startup_system(startup.system())
         .add_system(paddle_movement_system.system())
         .add_system(ball_collision_system.system())
+        .add_system(reset_time.system())
         .add_system(ball_movement_system.system())
         .add_system(scoreboard_system.system())
         .run();
@@ -28,6 +30,8 @@ struct Paddle {
 
 struct Ball {
     velocity: Vec3,
+    double_speed: f32,
+    time_since_last_score: u128,
 }
 
 struct Scoreboard {
@@ -47,27 +51,27 @@ fn startup(mut commands: Commands,
            asset_server: Res<AssetServer>,
             mut windows: ResMut<Windows>) {
     let wall_material = materials.add(Color::rgb(0.8, 0.8, 0.8).into());
-    let wall_thickness = 10.0;
+    let wall_thickness = 50.0;
     let bounds = Vec2::new(900.0, 600.0);
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands.spawn_bundle(UiCameraBundle::default());
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(Color::rgb(0.5, 0.5, 1.0).into()),
-            transform: Transform::from_xyz((-bounds.x/2 as f32)+45 as f32, 0.0, 0.0),
+            transform: Transform::from_xyz((-bounds.x/2 as f32)+25 as f32, 0.0, 0.0),
             sprite: Sprite::new(Vec2::new(30.0, 120.0)),
             ..Default::default()
         })
-        .insert(Paddle { speed: 300.0, paddle_number:0 })
+        .insert(Paddle { speed: 450.0, paddle_number:0 })
         .insert(Collider::Paddle);
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(Color::rgb(0.5, 0.5, 1.0).into()),
-            transform: Transform::from_xyz((bounds.x/2 as f32)-45 as f32, 0.0, 0.0),
+            transform: Transform::from_xyz((bounds.x/2 as f32)-25 as f32, 0.0, 0.0),
             sprite: Sprite::new(Vec2::new(30.0, 120.0)),
             ..Default::default()
         })
-        .insert(Paddle { speed: 300.0, paddle_number:1 })
+        .insert(Paddle { speed: 450.0, paddle_number:1 })
         .insert(Collider::Paddle);
     use rand::seq::SliceRandom;
     commands
@@ -79,12 +83,14 @@ fn startup(mut commands: Commands,
         })
         .insert(Ball {
             velocity: 600.0 * Vec3::new(*vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), *vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), 0.0).normalize(),
+            double_speed: 50.0,
+            time_since_last_score: 0,
         });
     // left
     commands
         .spawn_bundle(SpriteBundle {
             material: wall_material.clone(),
-            transform: Transform::from_xyz(-bounds.x / 2.0, 0.0, 0.0),
+            transform: Transform::from_xyz((-bounds.x / 2.0) - (wall_thickness / 2.0), 0.0, 0.0),
             sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y + wall_thickness)),
             ..Default::default()
         })
@@ -93,7 +99,7 @@ fn startup(mut commands: Commands,
     commands
         .spawn_bundle(SpriteBundle {
             material: wall_material.clone(),
-            transform: Transform::from_xyz(bounds.x / 2.0, 0.0, 0.0),
+            transform: Transform::from_xyz((bounds.x / 2.0) + (wall_thickness / 2.0), 0.0, 0.0),
             sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y + wall_thickness)),
             ..Default::default()
         })
@@ -102,7 +108,7 @@ fn startup(mut commands: Commands,
     commands
         .spawn_bundle(SpriteBundle {
             material: wall_material.clone(),
-            transform: Transform::from_xyz(0.0, -bounds.y / 2.0, 0.0),
+            transform: Transform::from_xyz(0.0, (-bounds.y / 2.0) - (wall_thickness / 2.0), 0.0),
             sprite: Sprite::new(Vec2::new(bounds.x + wall_thickness, wall_thickness)),
             ..Default::default()
         })
@@ -111,7 +117,7 @@ fn startup(mut commands: Commands,
     commands
         .spawn_bundle(SpriteBundle {
             material: wall_material,
-            transform: Transform::from_xyz(0.0, bounds.y / 2.0, 0.0),
+            transform: Transform::from_xyz(0.0, (bounds.y / 2.0) + (wall_thickness / 2.0), 0.0),
             sprite: Sprite::new(Vec2::new(bounds.x + wall_thickness, wall_thickness)),
             ..Default::default()
         })
@@ -194,7 +200,7 @@ fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Tran
 
     if let Ok((ball, mut transform)) = ball_query.single_mut() {
         if ball.velocity.y != 0.0 {
-            transform.translation += ball.velocity * delta_seconds;
+            transform.translation += ball.velocity * delta_seconds * ((((time.time_since_startup().as_millis() - ball.time_since_last_score)^2) as f32 / (ball.double_speed * 1000.0)) + 1.0);
         }
         else {
             transform.translation.y = 0.0;
@@ -204,10 +210,10 @@ fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Tran
 }
 
 fn ball_collision_system(
-    mut commands: Commands,
     mut scoreboard: ResMut<Scoreboard>,
     mut ball_query: Query<(&mut Ball, &Transform, &Sprite)>,
     collider_query: Query<(Entity, &Collider, &Transform, &Sprite)>,
+    time: Res<Time>,
 ) {
     if let Ok((mut ball, ball_transform, sprite)) = ball_query.single_mut() {
         let ball_size = sprite.size;
@@ -263,5 +269,12 @@ fn ball_collision_system(
                 }
             }
         }
+    }
+}
+
+fn reset_time(mut query: Query<(&mut Ball)>, time: Res<Time>,) {
+    let mut ball = query.single_mut().unwrap();
+    if ball.velocity.x == 0.0 {
+        ball.time_since_last_score = time.time_since_startup().as_millis();
     }
 }
