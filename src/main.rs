@@ -1,10 +1,17 @@
 use bevy::prelude::*;
 use bevy::ui::Val::Px;
 use bevy::sprite::collide_aabb::{Collision, collide};
+use rand::seq::SliceRandom;
 
 fn main() {
     App::build()
         .add_plugins(DefaultPlugins)
+        .insert_resource(WindowDescriptor {
+            title: "Pong".to_string(),
+            width: 920.0,
+            height: 620.0,
+            ..Default::default()
+        })
         .insert_resource(Scoreboard { score_one: 0, score_two: 0 })
         .add_startup_system(startup.system())
         .add_system(paddle_movement_system.system())
@@ -37,7 +44,8 @@ enum Collider {
 
 fn startup(mut commands: Commands,
            mut materials: ResMut<Assets<ColorMaterial>>,
-           asset_server: Res<AssetServer>) {
+           asset_server: Res<AssetServer>,
+            mut windows: ResMut<Windows>) {
     let wall_material = materials.add(Color::rgb(0.8, 0.8, 0.8).into());
     let wall_thickness = 10.0;
     let bounds = Vec2::new(900.0, 600.0);
@@ -50,7 +58,7 @@ fn startup(mut commands: Commands,
             sprite: Sprite::new(Vec2::new(30.0, 120.0)),
             ..Default::default()
         })
-        .insert(Paddle { speed: 500.0, paddle_number:0 })
+        .insert(Paddle { speed: 300.0, paddle_number:0 })
         .insert(Collider::Paddle);
     commands
         .spawn_bundle(SpriteBundle {
@@ -59,7 +67,7 @@ fn startup(mut commands: Commands,
             sprite: Sprite::new(Vec2::new(30.0, 120.0)),
             ..Default::default()
         })
-        .insert(Paddle { speed: 500.0, paddle_number:1 })
+        .insert(Paddle { speed: 300.0, paddle_number:1 })
         .insert(Collider::Paddle);
     use rand::seq::SliceRandom;
     commands
@@ -70,7 +78,7 @@ fn startup(mut commands: Commands,
             ..Default::default()
         })
         .insert(Ball {
-            velocity: 400.0 * Vec3::new(*vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), *vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), 0.0).normalize(),
+            velocity: 600.0 * Vec3::new(*vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), *vec![0.5, -0.5].choose(&mut rand::thread_rng()).unwrap(), 0.0).normalize(),
         });
     // left
     commands
@@ -108,6 +116,7 @@ fn startup(mut commands: Commands,
             ..Default::default()
         })
         .insert(Collider::Solid);
+    let mut window = windows.get_primary_mut().unwrap();
     commands.spawn_bundle(TextBundle {
         text: Text {
             sections: vec![
@@ -120,6 +129,15 @@ fn startup(mut commands: Commands,
                     },
                 },
             ],
+            ..Default::default()
+        },
+        style: Style {
+            position_type: PositionType::Relative,
+            position: Rect {
+                top: Px(-5.0),
+                left: Px(5.0),
+                ..Default::default()
+            },
             ..Default::default()
         },
         ..Default::default()
@@ -159,7 +177,7 @@ fn paddle_movement_system(
 
 fn scoreboard_system(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
     let mut text = query.single_mut().unwrap();
-    text.sections[0].value = format!("{} - {}", scoreboard.score_one, scoreboard.score_two);
+    text.sections[0].value = format!("{} - {}", scoreboard.score_two, scoreboard.score_one);
 }
 
 fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Transform)>) {
@@ -187,21 +205,9 @@ fn ball_collision_system(
         let ball_size = sprite.size;
         let velocity = &mut ball.velocity;
 
-        if velocity.x == 1.0 {
-            velocity.x = 200.0;
-            velocity.y = 200.0;
-        }
-        if velocity.x == 2.0 {
-            velocity.x = 200.0;
-            velocity.y = -200.0;
-        }
-        if velocity.x == 3.0 {
-            velocity.x = -200.0;
-            velocity.y = 200.0;
-        }
-        if velocity.x == 4.0 {
-            velocity.x = -200.0;
-            velocity.y = -200.0;
+        if velocity.x == 0.0 {
+            velocity.x = *vec![300.0, -300.0].choose(&mut rand::thread_rng()).unwrap();
+            velocity.y = *vec![300.0, -300.0].choose(&mut rand::thread_rng()).unwrap();
         }
         
         // check collision with walls
@@ -239,34 +245,12 @@ fn ball_collision_system(
 
                 if let Collider::Left = *collider {
                     scoreboard.score_one += 1;
-                    if velocity.x > 0.0 && velocity.y > 0.0 {
-                        velocity.x = 1.0;
-                    }
-                    if velocity.x > 0.0 && velocity.y < 0.0 {
-                        velocity.x = 2.0;
-                    }
-                    if velocity.x < 0.0 && velocity.y > 0.0 {
-                        velocity.x = 3.0;
-                    }
-                    if velocity.x < 0.0 && velocity.y < 0.0 {
-                        velocity.x = 4.0;
-                    }
+                    velocity.x = 0.0;
                     velocity.y = 0.0;
                 }
                 if let Collider::Right = *collider {
                     scoreboard.score_two += 1;
-                    if velocity.x > 0.0 && velocity.y > 0.0 {
-                        velocity.x = 1.0;
-                    }
-                    if velocity.x > 0.0 && velocity.y < 0.0 {
-                        velocity.x = 2.0;
-                    }
-                    if velocity.x < 0.0 && velocity.y > 0.0 {
-                        velocity.x = 3.0;
-                    }
-                    if velocity.x < 0.0 && velocity.y < 0.0 {
-                        velocity.x = 4.0;
-                    }
+                    velocity.x = 0.0;
                     velocity.y = 0.0;
                 }
             }
