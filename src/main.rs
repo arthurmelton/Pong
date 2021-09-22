@@ -132,12 +132,15 @@ fn startup(mut commands: Commands,
             ..Default::default()
         },
         style: Style {
-            position_type: PositionType::Relative,
+            position_type: PositionType::Absolute,
             position: Rect {
-                top: Px(-5.0),
-                left: Px(5.0),
+                top: Px(window.height() / 2.0),
+                left: Px(window.width() / 2.0),
                 ..Default::default()
             },
+            ..Default::default()
+        },
+        node: Node {
             ..Default::default()
         },
         ..Default::default()
@@ -175,9 +178,14 @@ fn paddle_movement_system(
     }
 }
 
-fn scoreboard_system(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
+fn scoreboard_system(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>, mut windows: ResMut<Windows>, mut styles: Query<&mut Style>, mut query1: Query<&mut Node>) {
     let mut text = query.single_mut().unwrap();
     text.sections[0].value = format!("{} - {}", scoreboard.score_two, scoreboard.score_one);
+    let mut window = windows.get_primary_mut().unwrap();
+    let mut style = styles.single_mut().unwrap();
+    let mut node = query1.single_mut().unwrap();
+    style.position.top = Px((window.height() / 2.0) - (node.size.y / 2.0));
+    style.position.left = Px((window.width() / 2.0) - (node.size.x / 2.0));
 }
 
 fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Transform)>) {
