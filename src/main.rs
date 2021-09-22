@@ -2,7 +2,6 @@ use bevy::prelude::*;
 use bevy::ui::Val::Px;
 use bevy::sprite::collide_aabb::{Collision, collide};
 use rand::seq::SliceRandom;
-use std::time::Duration;
 
 fn main() {
     App::build()
@@ -73,7 +72,6 @@ fn startup(mut commands: Commands,
         })
         .insert(Paddle { speed: 450.0, paddle_number:1 })
         .insert(Collider::Paddle);
-    use rand::seq::SliceRandom;
     commands
         .spawn_bundle(SpriteBundle {
             material: materials.add(Color::rgb(1.0, 0.5, 0.5).into()),
@@ -122,7 +120,7 @@ fn startup(mut commands: Commands,
             ..Default::default()
         })
         .insert(Collider::Solid);
-    let mut window = windows.get_primary_mut().unwrap();
+    let window = windows.get_primary_mut().unwrap();
     commands.spawn_bundle(TextBundle {
         text: Text {
             sections: vec![
@@ -159,27 +157,27 @@ fn paddle_movement_system(
     mut query: Query<(&Paddle, &mut Transform)>,
 ) {
     for mut x in query.iter_mut() {
-        let mut Direction = 0.0;
+        let mut direction = 0.0;
         if x.0.paddle_number == 1 {
             if keyboard_input.pressed(KeyCode::Down) {
-                Direction -= 1.0;
+                direction -= 1.0;
             }
 
             if keyboard_input.pressed(KeyCode::Up) {
-                Direction += 1.0;
+                direction += 1.0;
             }
         }
         else {
             if keyboard_input.pressed(KeyCode::LControl) {
-                Direction -= 1.0;
+                direction -= 1.0;
             }
 
             if keyboard_input.pressed(KeyCode::LShift) {
-                Direction += 1.0;
+                direction += 1.0;
             }
         }
         let translation = &mut x.1.translation;
-        translation.y += time.delta_seconds() * Direction * x.0.speed;
+        translation.y += time.delta_seconds() * direction * x.0.speed;
         translation.y = translation.y.min(240.0).max(-240.0);
     }
 }
@@ -187,9 +185,9 @@ fn paddle_movement_system(
 fn scoreboard_system(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>, mut windows: ResMut<Windows>, mut styles: Query<&mut Style>, mut query1: Query<&mut Node>) {
     let mut text = query.single_mut().unwrap();
     text.sections[0].value = format!("{} - {}", scoreboard.score_two, scoreboard.score_one);
-    let mut window = windows.get_primary_mut().unwrap();
+    let window = windows.get_primary_mut().unwrap();
     let mut style = styles.single_mut().unwrap();
-    let mut node = query1.single_mut().unwrap();
+    let node = query1.single_mut().unwrap();
     style.position.top = Px((window.height() / 2.0) - (node.size.y / 2.0));
     style.position.left = Px((window.width() / 2.0) - (node.size.x / 2.0));
 }
@@ -213,7 +211,6 @@ fn ball_collision_system(
     mut scoreboard: ResMut<Scoreboard>,
     mut ball_query: Query<(&mut Ball, &Transform, &Sprite)>,
     collider_query: Query<(Entity, &Collider, &Transform, &Sprite)>,
-    time: Res<Time>,
 ) {
     if let Ok((mut ball, ball_transform, sprite)) = ball_query.single_mut() {
         let ball_size = sprite.size;
@@ -225,7 +222,7 @@ fn ball_collision_system(
         }
         
         // check collision with walls
-        for (collider_entity, collider, transform, sprite) in collider_query.iter() {
+        for (_collider_entity, collider, transform, sprite) in collider_query.iter() {
             let collision = collide(
                 ball_transform.translation,
                 ball_size,
@@ -272,7 +269,7 @@ fn ball_collision_system(
     }
 }
 
-fn reset_time(mut query: Query<(&mut Ball)>, time: Res<Time>,) {
+fn reset_time(mut query: Query<&mut Ball>, time: Res<Time>,) {
     let mut ball = query.single_mut().unwrap();
     if ball.velocity.x == 0.0 {
         ball.time_since_last_score = time.time_since_startup().as_millis();
